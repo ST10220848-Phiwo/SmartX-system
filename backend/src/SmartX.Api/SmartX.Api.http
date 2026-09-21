@@ -1,0 +1,79 @@
+@host = http://localhost:8080
+
+### Service descriptor
+GET {{host}}/
+
+### Readiness — degraded above 90% queue depth
+GET {{host}}/health/ready
+
+### Ingest counters
+GET {{host}}/api/v1/ingest/stats
+
+### Push a batch. One of each kind, so all three union branches are exercised.
+POST {{host}}/api/v1/telemetry
+Content-Type: application/json
+
+{
+  "readings": [
+    { "site": "bench", "dev": "esp32-bench-01", "sig": "soil_moisture", "v": 42.7, "ts": 0, "seq": 1, "k": "Float" },
+    { "site": "bench", "dev": "esp32-bench-01", "sig": "power_watts",   "v": 231,  "seq": 2 },
+    { "site": "bench", "dev": "esp32-bench-01", "sig": "valve_open",    "v": true, "seq": 3 }
+  ]
+}
+
+### Type violation. Expect 202 with one rejection carrying code "type_mismatch" —
+### the gateway does not convert true into 1.0.
+POST {{host}}/api/v1/telemetry
+Content-Type: application/json
+
+{
+  "readings": [
+    { "site": "bench", "dev": "esp32-bench-01", "sig": "soil_moisture", "v": true, "seq": 4 }
+  ]
+}
+
+### Quoted number. Expect 400: a device sending "42" is a firmware bug, not a value to parse.
+POST {{host}}/api/v1/telemetry
+Content-Type: application/json
+
+{
+  "readings": [
+    { "site": "bench", "dev": "esp32-bench-01", "sig": "soil_moisture", "v": "42", "seq": 5 }
+  ]
+}
+
+### Read the window back
+GET {{host}}/api/v1/telemetry/bench/esp32-bench-01/soil_moisture?max=50
+
+### Every signal the gateway has seen
+GET {{host}}/api/v1/telemetry/signals
+
+### Fleet tier
+GET {{host}}/api/v1/fleet/summary
+
+### Devices at one site
+GET {{host}}/api/v1/devices?site=site-00
+
+### Arm a spike so the PR-3 scorer has something to find
+POST {{host}}/api/v1/seed/fault
+Content-Type: application/json
+
+{ "class": "Spike", "durationMs": 20000, "magnitude": 9 }
+
+### Correlated outage — the load-shedding case that must collapse to one event
+POST {{host}}/api/v1/seed/fault
+Content-Type: application/json
+
+{ "class": "SiteWideOutage", "site": "site-01", "durationMs": 30000 }
+
+### Drive the queue into backpressure
+POST {{host}}/api/v1/seed/fault
+Content-Type: application/json
+
+{ "class": "Flood", "durationMs": 15000, "magnitude": 200 }
+
+### Deliverable 2 — expect 501 with plannedIn: PR-5
+GET {{host}}/api/v1/commands/esp32-bench-01/history
+
+### Deliverable 3 — expect 501 with plannedIn: PR-6
+GET {{host}}/api/v1/topology
