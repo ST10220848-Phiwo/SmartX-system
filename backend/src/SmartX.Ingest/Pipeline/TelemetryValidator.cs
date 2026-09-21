@@ -5,18 +5,15 @@ using SmartX.Core.Telemetry;
 
 namespace SmartX.Ingest.Pipeline;
 
-/// <summary>
+
 /// Represents the result of a validation operation, including whether the validation was successful,
 /// failure code, failure detail, the reading being validated, and an optional signal descriptor.
-/// </summary>
-///<remarks>
 ///<param name="Code">The failure code associated with the validation result, if any.</param>
 ///<param name="Descriptor">The signal descriptor associated with the reading being validated, if any.</param>
 /// <param name="IsValid">Indicates whether the validation was successful.</param>
 /// <param name="Detail">Provides additional details about the validation result, if any.</param>
 /// <param name="Reading">The reading being validated.</param>
-/// </remarks>
-/// 
+ 
 
 public readonly record struct ValidationResult(bool IsValid, string? Code, 
   string? Detail, Reading Reading, SignalDescriptor? Descriptor)
@@ -33,13 +30,10 @@ public readonly record struct ValidationResult(bool IsValid, string? Code,
 
 }
 
-/// <summary>
+
 /// Turns a reading into a validated reading, or rejects it with a failure code and detail.
 /// class exists to enforce: a reading whose type contradicts the signal descriptor is rejected, 
 /// and a reading whose value is outside the signal descriptor's range is rejected.
-/// </summary>
-/// 
-
 public sealed class TelemetryValidator
 {
     //Beyond 2^53, double precision floating point numbers cannot represent all integers accurately.

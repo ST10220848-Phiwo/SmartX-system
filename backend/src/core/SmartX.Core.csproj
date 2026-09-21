@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>SmartX.Core</RootNamespace>
+    <!-- Explicit layout and Interlocked work here; the struct is deliberately unsafe-adjacent. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SmartX.Core.Tests" />
+  </ItemGroup>
+
+</Project>

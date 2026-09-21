@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+<PropertyGroup>
+  <RootNamespace>SmartX.Contracts</RootNamespace>
+</PropertyGroup>
+
+<ItemGroup>
+  <ProjectReference Include="..\SmartX.Core\SmartX.Core.csproj" />
+</ItemGroup>
+
+</Project>

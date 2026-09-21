@@ -1,0 +1,112 @@
+name: smart-x
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+      target: runtime
+    image: smartx/gateway:0.1.0
+    container_name: smartx-api
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-8080}:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      # Double underscore is the .NET configuration separator, so these override
+      # appsettings.json without a config file per environment.
+      SmartX__Features__SeederControls: ${SEEDER_CONTROLS:-true}
+      SmartX__Seeder__Enabled: ${SEEDER_ENABLED:-true}
+      SmartX__Seeder__Sites: ${SEEDER_SITES:-4}
+      SmartX__Seeder__DevicesPerSite: ${SEEDER_DEVICES_PER_SITE:-25}
+      SmartX__Seeder__PublishIntervalMs: ${SEEDER_INTERVAL_MS:-1000}
+      SmartX__Ingest__QueueCapacity: ${INGEST_QUEUE_CAPACITY:-65536}
+      SmartX__Cors__Origins__0: http://localhost:${WEB_PORT:-5173}
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/health/ready"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          # Capped on purpose. The bounded queue's whole job is to keep the process
+          # inside a fixed memory envelope under load; an uncapped container would
+          # hide a regression that a real deployment would not survive.
+          memory: 1g
+    networks: [smartx]
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/web/Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+    image: smartx/console:0.1.0
+    container_name: smartx-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-5173}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [smartx]
+
+  mosquitto:
+    profiles: [mqtt]
+    image: eclipse-mosquitto:2.0
+    container_name: smartx-mqtt
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./docker/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto-data:/mosquitto/data
+    networks: [smartx]
+
+  timescale:
+    profiles: [storage]
+    image: timescale/timescaledb:latest-pg16
+    container_name: smartx-tsdb
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: smartx
+      POSTGRES_USER: ${POSTGRES_USER:-smartx}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-smartx}
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescale-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-smartx} -d smartx"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [smartx]
+
+  # Same image as `api`, started with the seeder wound up. Used to prove the ring
+  # buffers and the bounded queue behave under a fleet-scale message rate.
+  loadgen:
+    profiles: [load]
+    image: smartx/gateway:0.1.0
+    container_name: smartx-loadgen
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: 8081
+      SmartX__Seeder__Enabled: "true"
+      SmartX__Seeder__Sites: "10"
+      SmartX__Seeder__DevicesPerSite: "200"
+      SmartX__Seeder__PublishIntervalMs: "200"
+    networks: [smartx]
+
+networks:
+  smartx:
+    driver: bridge
+
+volumes:
+  mosquitto-data:
+  timescale-data:
